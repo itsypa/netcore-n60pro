@@ -9,6 +9,7 @@ fi
 SOURCE_DIR="$(readlink -f "$1")"
 PROJECT_DIR="$(readlink -f "$2")"
 CONFIG_FILE="$PROJECT_DIR/configs/n60pro-high-power.config"
+AUTHOR_PACKAGES_CONFIG="$PROJECT_DIR/configs/author-parity-packages.config"
 HIGH_POWER_TEMPLATE="$SOURCE_DIR/defconfig/mt7975-ipailna-high-power.config"
 PATCH_SCRIPT="$PROJECT_DIR/scripts/apply-n60pro-high-power-patch.py"
 EXPECTED_DEVICE="CONFIG_TARGET_mediatek_filogic_DEVICE_netcore_n60-pro=y"
@@ -63,6 +64,11 @@ command -v python3 >/dev/null 2>&1 || {
 	exit 66
 }
 
+[ -f "$AUTHOR_PACKAGES_CONFIG" ] || {
+	echo "Author package config not found: $AUTHOR_PACKAGES_CONFIG" >&2
+	exit 66
+}
+
 [ -f "$HIGH_POWER_TEMPLATE" ] || {
 	echo "High-power defconfig not found: $HIGH_POWER_TEMPLATE" >&2
 	exit 66
@@ -110,6 +116,7 @@ cp -f "$CONFIG_FILE" .config
 	printf '\n# High-power RF options from mt7975-ipailna-high-power.config\n'
 	awk '/^#? ?CONFIG_(MTK_|WARP_)|^CONFIG_first_card_name/' \
 		"$HIGH_POWER_TEMPLATE"
+	cat "$AUTHOR_PACKAGES_CONFIG"
 } >> .config
 
 make defconfig
@@ -143,6 +150,20 @@ grep -qx 'CONFIG_PACKAGE_luci-app-mtwifi-cfg=y' .config || {
 	echo "The LuCI mt_wifi configuration package was not selected" >&2
 	exit 65
 }
+
+missing_author_packages=0
+while IFS= read -r package_line; do
+	if printf '%s\n' "$package_line" | grep -Eq '^CONFIG_PACKAGE_.*=y$'; then
+		if ! grep -qx "$package_line" .config; then
+			echo "Author parity package missing from .config: $package_line" >&2
+			missing_author_packages=1
+		fi
+	fi
+done < "$AUTHOR_PACKAGES_CONFIG"
+
+if [ "$missing_author_packages" -ne 0 ]; then
+	exit 65
+fi
 
 enabled_devices="$({
 	grep -E '^CONFIG_TARGET_(DEVICE_)?mediatek_filogic_DEVICE_.*=y$' .config || true
@@ -183,6 +204,7 @@ mkdir -p "$DIST_DIR"
 cp -f "$image" "$DIST_DIR/$artifact_image"
 cp -f .config "$DIST_DIR/build.config"
 cp -f "$HIGH_POWER_TEMPLATE" "$DIST_DIR/high-power-template.config"
+cp -f "$AUTHOR_PACKAGES_CONFIG" "$DIST_DIR/author-parity-packages.config"
 cp -f "$PATCH_SCRIPT" "$DIST_DIR/apply-n60pro-high-power-patch.py"
 printf '%s\n' "$VERSION" > "$DIST_DIR/VERSION.txt"
 
@@ -196,6 +218,7 @@ fi
 	printf 'device=netcore_n60-pro\n'
 	printf 'version=%s\n' "$VERSION"
 	printf 'release_tag=v%s\n' "$VERSION"
+	printf 'feature_profile=author-parity\n'
 	printf 'wireless_profile=mt7975-ipailna-high-power\n'
 	printf 'wireless_packages=mt_wifi-only\n'
 	printf 'upstream_repository=padavanonly/immortalwrt-mt798x-6.6\n'
@@ -210,6 +233,7 @@ fi
 		"$artifact_image" \
 		build.config \
 		high-power-template.config \
+		author-parity-packages.config \
 		apply-n60pro-high-power-patch.py \
 		VERSION.txt \
 		BUILD_INFO.txt \
