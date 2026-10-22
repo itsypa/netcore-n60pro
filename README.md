@@ -1,144 +1,79 @@
-# Netcore N60 Pro High-Power ImmortalWrt Builder
+# 磊科 N60 Pro 高功率 ImmortalWrt 构建项目
 
-This is a small build wrapper for producing **only** a high-power Netcore
-N60 Pro (`netcore_n60-pro`) ImmortalWrt firmware image.
+本项目只用于在 GitHub Actions 中手动构建磊科 N60 Pro 高功率固件。构建成功后会自动发布 GitHub Release。
 
-The OpenWrt/ImmortalWrt source is not stored in this repository. GitHub Actions
-checks out the selected upstream revision (the latest
-`openwrt-24.10-6.6` branch by default), installs the build dependencies, builds
-the single device target, and uploads the resulting `sysupgrade` image as an
-artifact.
+上游源码：
 
-Upstream project:
 <https://github.com/padavanonly/immortalwrt-mt798x-6.6>
 
-## What it builds
+## 构建内容
 
-- Target: MediaTek / Filogic
-- Device: Netcore N60 Pro
-- Release image: `netcore-n60pro-<upstream-version>.bin`
-  (currently `netcore-n60pro-24.10.bin`)
-- Wireless stack: MediaTek `mt_wifi` with `mtwifi-cfg` and LuCI support
-- RF profile: `mt7975-ipailna-high-power.config` (`iPAiLNA`, AX6000 SKU)
+- 设备：磊科 N60 Pro（`netcore_n60-pro`）
+- 平台：MediaTek Filogic / MT7986
+- 无线：MediaTek `mt_wifi` 厂商驱动
+- 射频：`iPAiLNA` 高功率配置、AX6000 SKU
+- Release 版本：由上游 `include/version.mk` 自动读取
+- 当前版本：`24.10`
+- 唯一 Release 资产：`netcore-n60pro-24.10.bin`
 
-RF template:
-<https://github.com/padavanonly/immortalwrt-mt798x-6.6/blob/openwrt-24.10-6.6/defconfig/mt7975-ipailna-high-power.config>
+构建时会从上游高功率模板提取 RF 选项，并移除 N60 Pro 配方中的 `mt7915e`、`mt7986` 等 `mt76` 无线包，避免与 `mt_wifi` 冲突。USB、自动挂载和 USB LED 等设备功能保留。
 
-The build script rejects a configuration that selects more than one device.
-It also rejects a build where the high-power `iPAiLNA` option, MT7986 ADIE
-profile, or `kmod-mt_wifi` package was dropped.
+## GitHub 构建
 
-The target and package selections live in
-[`configs/n60pro-high-power.config`](configs/n60pro-high-power.config). The
-RF options are copied from the selected upstream
-`defconfig/mt7975-ipailna-high-power.config` during the build, so the exact
-driver feature set stays aligned with the selected upstream revision.
-The template filename mentions MT7975, but its contents select the MT7976
-ADIE type; this project follows the template contents rather than the
-filename.
+1. 将项目推送到 GitHub 仓库。
+2. 打开 **Actions**。
+3. 选择 **Build and publish Netcore N60 Pro high-power firmware**。
+4. 点击 **Run workflow**。
+5. 构建完成后，在 **Releases** 中下载固件。
 
-The build workspace applies a small compatibility patch to the N60 Pro image
-recipe. It removes the stock `kmod-mt7915e`, `kmod-mt7986-firmware`, and
-`mt7986-wo-firmware` package tokens so the radio is handled by `mt_wifi`
-instead of competing with the open-source `mt76` stack. USB, automount, and
-other non-wireless device packages remain unchanged.
+工作流仅支持手动启动，不会因为 push、分支或标签自动运行。
 
-## Build on GitHub
+Release 会自动创建或更新为 `v24.10`。如果该 Release 已存在，会删除旧资产，只上传最新的：
 
-1. Create a new repository in your GitHub account and push this directory to it.
-2. Open the **Actions** tab and enable workflows if GitHub asks you to.
-3. Select **Build and publish Netcore N60 Pro high-power firmware**.
-4. Click **Run workflow**.
-5. When the job finishes, the firmware is published automatically as a
-   GitHub Release.
+`netcore-n60pro-24.10.bin`
 
-The artifact contains the firmware, `SHA256SUMS`, the resolved `build.config`,
-the source high-power template, the package compatibility patch, and
-`BUILD_INFO.txt` with the exact upstream commit used for the build.
+Actions Artifact 仍会保留 `SHA256SUMS`、最终 `build.config`、高功率模板、兼容补丁和构建信息，便于排查问题，但这些文件不会进入 Release。
 
-The Release version is read from the upstream `include/version.mk`. For the
-current upstream branch this produces Release tag `v24.10` and the only Release
-asset `netcore-n60pro-24.10.bin`. The Actions artifact still keeps the
-diagnostic files, but they are not uploaded to the Release.
+## 上游版本
 
-The workflow is manual-only. Pushing code, branches, or tags does not start it;
-use the Actions page to start a build. A successful manual build publishes the
-Release automatically.
+- 默认跟踪：`openwrt-24.10-6.6`
+- 上游源码提交会记录到 Actions 运行摘要和 `BUILD_INFO.txt`
+- 手动运行时可填写 `source_ref` 指定分支、标签或提交
+- 填写 `pinned` 可使用 [`upstream.env`](upstream.env) 中记录的已知可用提交
 
-The workflow runs on `ubuntu-22.04`, has a six-hour timeout, and can be
-triggered only manually from the Actions page.
-It removes unused preinstalled runner toolchains before building because
-OpenWrt is larger than the runner's normal 14 GB working space. If repeated
-builds hit a disk limit, use a larger or self-hosted runner.
+版本号从上游 `include/version.mk` 解析，因此上游仍为 24.10 时，Release 标签和文件名都保持 `24.10`。
 
-GitHub-hosted standard runners are free for public repositories. A private
-repository uses the account's Actions minutes and storage quota.
+## 主要文件
 
-By default, the workflow tracks the latest `openwrt-24.10-6.6` branch, so an
-upstream update can be built by manually running the workflow again. Enter
-`pinned` in the `source_ref` input to use the known-good commit recorded in
-[`upstream.env`](upstream.env), or enter any branch, tag, or commit for a
-one-off build. The chosen upstream commit is written to the workflow summary.
+- [`configs/n60pro-high-power.config`](configs/n60pro-high-power.config)：N60 Pro 单机型配置
+- [`scripts/build-n60pro-high-power.sh`](scripts/build-n60pro-high-power.sh)：构建和产物整理脚本
+- [`scripts/apply-n60pro-high-power-patch.py`](scripts/apply-n60pro-high-power-patch.py)：移除冲突的 `mt76` 无线包
+- [`.github/workflows/build.yml`](.github/workflows/build.yml)：GitHub Actions 工作流
 
-## Publish a release
+## 刷机注意
 
-Start the workflow manually after pushing the repository:
+- 本项目只生成 `sysupgrade` 镜像，不含 `factory` 首刷镜像。
+- 仅适用于磊科 **N60 Pro**，不要用于普通 N60。
+- 刷机前确认硬件版本、Bootloader 和分区布局。
+- 先备份原厂固件和无线校准数据。
+- 高功率配置可能提高发热、功耗和射频干扰，并受当地无线电法规限制。
 
-**Actions → Build and publish Netcore N60 Pro high-power firmware → Run workflow**
+## 本地构建
 
-The workflow creates or updates Release `v24.10` automatically. If that
-Release already exists, all existing Release assets are removed and only
-`netcore-n60pro-24.10.bin` is uploaded. The workflow requires repository
-`contents: write` permission for this step.
-
-## Flashing caution
-
-This project produces a `sysupgrade` image. The upstream device recipe does
-not define a `factory` image for the N60 Pro, so this repository does not
-provide a one-step image for the stock Netcore web interface.
-
-This is a vendor high-power RF profile. It changes the PA/LNA calibration
-profile and can increase heat, power consumption, interference, and radio
-emissions. Make sure the physical PA/LNA variant and regional radio
-regulations match your hardware before using it. A profile intended for a
-different RF board revision may produce poor performance or damage the
-radio, so back up calibration data first.
-
-Before flashing:
-
-- Verify that the router is exactly a Netcore **N60 Pro**, not an N60.
-- Confirm the installed bootloader and flash layout.
-- Back up the original firmware and calibration data.
-- Do not flash an image built for a different revision or device.
-
-## Local build
-
-Use a case-sensitive Linux filesystem. Install the dependencies listed in the
-workflow, check out the pinned upstream source, then run:
+在 Linux 环境安装工作流中的依赖后运行：
 
 ```bash
 bash scripts/build-n60pro-high-power.sh /path/to/immortalwrt-mt798x-6.6 .
 ```
 
-The built files are copied to `dist/`.
+构建文件会输出到 `dist/`。
 
-## Updating upstream
+## 权限
 
-The workflow can build a newer upstream revision without editing this
-project. After a successful build, update `UPSTREAM_PINNED_REF` in
-[`upstream.env`](upstream.env) to record a new known-good commit that still
-contains:
+自动发布 Release 需要仓库允许写权限。若发布失败，请进入：
 
-- `target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts`
-- `define Device/netcore_n60-pro` in
-  `target/linux/mediatek/image/filogic.mk`
-- `defconfig/mt7975-ipailna-high-power.config`
+**Settings → Actions → General → Workflow permissions**
 
-The build script checks all three before starting.
+选择 **Read and write permissions**。
 
-## Notes
-
-This is an unofficial build wrapper. It is not affiliated with Netcore,
-OpenWrt, ImmortalWrt, or the upstream repository maintainer. The upstream
-source and firmware components remain subject to their own licenses and
-usage terms.
+本项目不是 OpenWrt、ImmortalWrt 或磊科的官方项目，固件和上游代码的使用请遵守各自许可证及法规。
