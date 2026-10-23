@@ -12,7 +12,7 @@
 - 平台：MediaTek Filogic / MT7986
 - 无线：MediaTek `mt_wifi` 厂商驱动
 - 射频：`iPAiLNA` 高功率配置、AX6000 SKU
-- 功能集：补入作者多出的 127 个软件包
+- 功能集：补齐作者多出的 127 个运行包（对应 121 个显式构建包）
 - Release 版本：由上游 `include/version.mk` 自动读取
 - 当前版本：`24.10`
 - 唯一 Release 资产：`netcore-n60pro-24.10.bin`
@@ -20,6 +20,8 @@
 构建时会从上游高功率模板提取 RF 选项，并移除 N60 Pro 配方中的 `mt7915e`、`mt7986` 等 `mt76` 无线包，避免与 `mt_wifi` 冲突。USB、自动挂载和 USB LED 等设备功能保留。
 
 作者功能包包括 KSMBD/SMB、TurboACC、EQoS、wrtbwmon、ZRAM、USB WWAN、额外 iptables/ipset、tcpdump、htop、OpenSSL 工具和 Argon 主题等。缺失功能包会导致构建在发布前直接失败，而不是静默生成精简固件。
+
+作者镜像中的 `libnl200`、`libstdcpp6`、`libxtables12` 等是 ABI 运行时包，不是可直接选择的构建包；构建时会由 `libnl`、`libstdcpp`、iptables 等顶层包自动安装。
 
 ## GitHub 构建
 
